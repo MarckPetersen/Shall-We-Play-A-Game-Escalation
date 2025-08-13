@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Shall We Play A Game? — ESCALATION</title>
+  <style>
+    :root{
+      --bg:#0b0f14; --panel:#121823; --panel-2:#0e141d; --text:#eaf2ff; --muted:#9fb3c8; --accent:#5fb3ff; --good:#2bd17e; --warn:#ffb020; --bad:#ff5f6d;
+      --card:#0f1520;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;font:14px/1.4 system-ui,Segoe UI,Roboto,Helvetica,Arial;background:radial-gradient(1200px 700px at 20% -10%, #132034, #09121e 60%, #060a11);color:var(--text)}
+    header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #1d2633;background:linear-gradient(180deg,#0f1623,#0b111c)}
+    h1{margin:0;font-size:20px;letter-spacing:.4px}
+    .defcon{display:inline-flex;gap:6px;align-items:center}
+    .dot{width:12px;height:12px;border-radius:50%;background:#1e2a3a;box-shadow:0 0 0 1px #0008 inset}
+    .dot.on.green{background:var(--good)}
+    .dot.on.amber{background:var(--warn)}
+    .dot.on.red{background:var(--bad)}
+
+    .layout{display:grid;grid-template-columns:300px 1fr 320px;gap:14px;padding:14px}
+
+    .card{background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid #1b2432;border-radius:14px;box-shadow:0 4px 20px #0007}
+    .card .card-h{padding:12px 14px;border-bottom:1px solid #1c2533;color:var(--muted);letter-spacing:.3px}
+    .card .card-b{padding:12px 14px}
+
+    .controls label{display:block;margin:10px 0 4px;color:var(--muted)}
+    .controls input[type="range"]{width:100%}
+    .controls input[type="number"], .controls input[type="text"], .controls select{width:100%;padding:8px 10px;border-radius:10px;border:1px solid #263142;background:#0a121c;color:var(--text)}
+
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .btn{padding:8px 12px;border-radius:10px;border:1px solid #2a3a53;background:#0f1a2a;color:#e8f1ff;cursor:pointer}
+    .btn:hover{filter:brightness(1.1)}
+    .btn.ghost{background:transparent}
+    .btn.primary{background:linear-gradient(180deg,#1a9cff,#1488ff);border-color:#1678ff}
+
+    .ai-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .policy{border:1px solid #213047;border-radius:12px;padding:10px;background:linear-gradient(180deg,#0f1622,#0d1420)}
+    .policy h3{margin:0 0 8px;font-size:14px}
+    .action-pill{display:inline-block;padding:4px 10px;border-radius:999px;border:1px solid #2a3a53;background:#0a121c;color:#cfe2ff;font-weight:600;letter-spacing:.5px}
+
+    .meters{display:grid;grid-template-columns:2fr 1fr;gap:10px}
+    .gauge{height:160px;position:relative;border-radius:12px;background:conic-gradient(var(--good) 0deg, var(--warn) 120deg, var(--bad) 240deg, #222 240deg 360deg);display:flex;align-items:center;justify-content:center}
+    .gauge .mask{position:absolute;inset:12px;border-radius:12px;background:linear-gradient(180deg,#0a111a,#0a0f18)}
+    .gauge .needle{position:absolute;width:2px;height:70px;background:#fff;transform-origin:bottom center;bottom:50%;}
+    .gauge .label{position:absolute;bottom:10px;color:var(--muted)}
+
+    .score{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .score .sc{padding:10px;border-radius:10px;background:#0c1420;border:1px solid #1e2a3b}
+
+    canvas{width:100%;height:220px;background:#0a111a;border:1px solid #1b2431;border-radius:10px}
+
+    .footer{padding:10px 14px;color:#88a;display:flex;gap:12px;align-items:center;justify-content:space-between}
+    .small{font-size:12px;color:var(--muted)}
+
+    @media(max-width:1100px){
+      .layout{grid-template-columns:1fr;}
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Shall We Play A Game? <span class="small">— ESCALATION</span></h1>
+    <div class="defcon" title="Crisis level">
+      <div class="dot" id="d-green"></div>
+      <div class="dot" id="d-amber"></div>
+      <div class="dot" id="d-red"></div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- Left: Controls -->
+    <section class="card">
+      <div class="card-h">Controls</div>
+      <div class="card-b controls">
+        <label>AI A Policy</label>
+        <select id="policyA"></select>
+        <label>AI B Policy</label>
+        <select id="policyB"></select>
+
+        <div class="row" style="margin-top:8px">
+          <button class="btn primary" id="playBtn">Play</button>
+          <button class="btn" id="stepBtn">Step</button>
+          <button class="btn ghost" id="resetBtn">Reset</button>
+        </div>
+
+        <label style="margin-top:12px">Rounds (N)</label>
+        <input type="range" id="rounds" min="10" max="200" value="60" />
+        <div class="small" id="roundsVal">60</div>
+
+        <label>Tension starts at</label>
+        <input type="range" id="tension0" min="0" max="100" value="20" />
+        <div class="small" id="tension0Val">20</div>
+
+        <label>De‑escalation drop per D vs D</label>
+        <input type="range" id="dropD" min="0" max="25" value="10" />
+        <div class="small" id="dropDVal">10</div>
+
+        <label>False Alarm rate (%)</label>
+        <input type="range" id="falseAlarm" min="0" max="50" value="5" />
+        <div class="small" id="falseVal">5%</div>
+
+        <label>Noise (perception jitter)</label>
+        <input type="range" id="noise" min="0" max="100" value="10" />
+        <div class="small" id="noiseVal">10</div>
+
+        <label>Seed</label>
+        <input type="text" id="seed" placeholder="auto" />
+        <div class="row" style="margin-top:8px">
+          <button class="btn" id="randomize">New Seed</button>
+          <button class="btn" id="share">Copy Share Link</button>
+        </div>
+
+        <div class="row" style="margin-top:10px">
+          <button class="btn" id="btnDiplomacy">Inject Diplomacy (−15)</button>
+          <button class="btn" id="btnGlitch">Sensor Glitch (+15)</button>
+          <button class="btn" id="btnBackchannel">Backchannel (force D)</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Middle: Visualization -->
+    <section class="card">
+      <div class="card-h">Battlefield</div>
+      <div class="card-b">
+        <div class="ai-grid">
+          <div class="policy">
+            <h3>AI A <span class="small" id="aPol"></span></h3>
+            <div>Chose: <span class="action-pill" id="aAction">—</span></div>
+            <div class="small" id="aWhy" style="margin-top:6px;color:#a9bed8"></div>
+          </div>
+          <div class="policy">
+            <h3>AI B <span class="small" id="bPol"></span></h3>
+            <div>Chose: <span class="action-pill" id="bAction">—</span></div>
+            <div class="small" id="bWhy" style="margin-top:6px;color:#a9bed8"></div>
+          </div>
+        </div>
+
+        <div class="meters" style="margin-top:12px">
+          <div class="gauge" id="gauge">
+            <div class="mask"></div>
+            <div class="needle" id="needle"></div>
+            <div class="label">Global Tension</div>
+          </div>
+          <div class="score">
+            <div class="sc">Round: <b id="round">1</b><br/>Max: <span id="maxRounds">60</span></div>
+            <div class="sc">Scores — A: <b id="scoreA">0</b> | B: <b id="scoreB">0</b></div>
+          </div>
+        </div>
+
+        <div style="margin-top:10px">
+          <canvas id="chart" width="900" height="220"></canvas>
+        </div>
+      </div>
+      <div class="footer small">
+        <span id="ending">Outcome: —</span>
+        <span>“Sometimes the only winning move is not to play.”</span>
+      </div>
+    </section>
+
+    <!-- Right: Log -->
+    <section class="card">
+      <div class="card-h">Event Log</div>
+      <div class="card-b" id="log" style="height:520px;overflow:auto;white-space:pre-wrap"></div>
+    </section>
+  </main>
+
+  <script>
+    // === Deterministic RNG (Mulberry32) ===
+    function mulberry32(a){return function(){var t=a+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return ((t^t>>>14)>>>0)/4294967296}}
+    function hashSeed(str){let h=2166136261>>>0; for(let i=0;i<str.length;i++){h^=str.charCodeAt(i); h=Math.imul(h,16777619)} return h>>>0}
+
+    // === State ===
+    const state = {
+      round:1,maxRounds:60,tension:20,history:[],scores:{A:0,B:0},
+      seedStr:"", rng: mulberry32(12345),
+      params:{falseAlarm:0.05, deEscalationDrop:10, noise:10},
+      forceD:false
+    };
+
+    const policies = {
+      "Tit for Tat": makePolicyTitForTat(),
+      "Grim Trigger": makePolicyGrim(),
+      "Win-Stay Lose-Shift": makePolicyWSLS(),
+      "Risky Hawk": makePolicyRisky(),
+      "Cautious Dove": makePolicyDove()
+    };
+
+    // === UI elements ===
+    const els = {
+      policyA: document.getElementById('policyA'),
+      policyB: document.getElementById('policyB'),
+      aPol: document.getElementById('aPol'), bPol: document.getElementById('bPol'),
+      aAction: document.getElementById('aAction'), bAction: document.getElementById('bAction'),
+      aWhy: document.getElementById('aWhy'), bWhy: document.getElementById('bWhy'),
+      rounds: document.getElementById('rounds'), roundsVal: document.getElementById('roundsVal'),
+      tension0: document.getElementById('tension0'), tension0Val: document.getElementById('tension0Val'),
+      dropD: document.getElementById('dropD'), dropDVal: document.getElementById('dropDVal'),
+      falseAlarm: document.getElementById('falseAlarm'), falseVal: document.getElementById('falseVal'),
+      noise: document.getElementById('noise'), noiseVal: document.getElementById('noiseVal'),
+      playBtn: document.getElementById('playBtn'), stepBtn: document.getElementById('stepBtn'), resetBtn: document.getElementById('resetBtn'),
+      randomize: document.getElementById('randomize'), share: document.getElementById('share'), seed: document.getElementById('seed'),
+      round: document.getElementById('round'), maxRounds: document.getElementById('maxRounds'),
+      scoreA: document.getElementById('scoreA'), scoreB: document.getElementById('scoreB'),
+      gauge: document.getElementById('gauge'), needle: document.getElementById('needle'),
+      ending: document.getElementById('ending'),
+      log: document.getElementById('log'),
+      chart: document.getElementById('chart'),
+      dGreen: document.getElementById('d-green'), dAmber: document.getElementById('d-amber'), dRed: document.getElementById('d-red'),
+      btnDip: document.getElementById('btnDiplomacy'), btnGlitch: document.getElementById('btnGlitch'), btnBack: document.getElementById('btnBackchannel')
+    };
+
+    let playing=false, rafId=null, speedMs=350;
+
+    // === Init ===
+    function init(){
+      // populate policies
+      for(const k of Object.keys(policies)){
+        const o1=new Option(k,k); const o2=new Option(k,k);
+        els.policyA.add(o1); els.policyB.add(o2);
+      }
+      els.policyA.value = urlParams.policyA || 'Tit for Tat';
+      els.policyB.value = urlParams.policyB || 'Grim Trigger';
+      els.aPol.textContent = '('+els.policyA.value+')';
+      els.bPol.textContent = '('+els.policyB.value+')';
+
+      els.roundsVal.textContent=els.rounds.value; els.maxRounds.textContent=els.rounds.value;
+      els.tension0Val.textContent=els.tension0.value;
+      els.dropDVal.textContent=els.dropD.value;
+      els.falseVal.textContent=els.falseAlarm.value+"%";
+      els.noiseVal.textContent=els.noise.value;
+
+      els.rounds.oninput=()=>{els.roundsVal.textContent=els.rounds.value; els.maxRounds.textContent=els.rounds.value}
+      els.tension0.oninput=()=>els.tension0Val.textContent=els.tension0.value
+      els.dropD.oninput=()=>els.dropDVal.textContent=els.dropD.value
+      els.falseAlarm.oninput=()=>els.falseVal.textContent=els.falseAlarm.value+"%"
+      els.noise.oninput=()=>els.noiseVal.textContent=els.noise.value
+      els.policyA.onchange=()=>els.aPol.textContent='('+els.policyA.value+')'
+      els.policyB.onchange=()=>els.bPol.textContent='('+els.policyB.value+')'
+
+      els.playBtn.onclick=togglePlay; els.stepBtn.onclick=()=>{step(); draw()}; els.resetBtn.onclick=reset;
+      els.randomize.onclick=()=>{els.seed.value=Math.random().toString(36).slice(2); applySeed(els.seed.value)};
+      els.share.onclick=copyShareLink;
+      els.btnDip.onclick=()=>{state.tension=Math.max(0,state.tension-15); log(`Diplomacy reduces tension by 15 → ${fmt(state.tension)}`); draw()};
+      els.btnGlitch.onclick=()=>{state.tension=Math.min(100,state.tension+15); log(`Sensor glitch increases tension by 15 → ${fmt(state.tension)}`); draw()};
+      els.btnBack.onclick=()=>{state.forceD=true; log(`Backchannel forces both to DE‑ESCALATE this round.`)};
+
+      // Apply URL params
+      if(urlParams.seed){ els.seed.value=urlParams.seed; }
+      applySeed(els.seed.value||('seed'+Math.floor(Math.random()*1e9)));
+
+      els.rounds.value = urlParams.N || els.rounds.value; els.maxRounds.textContent=els.rounds.value; els.roundsVal.textContent=els.rounds.value;
+      if(urlParams.tension) { els.tension0.value=urlParams.tension; els.tension0Val.textContent=els.tension0.value }
+      if(urlParams.false){ els.falseAlarm.value=urlParams.false; els.falseVal.textContent=els.falseAlarm.value+"%" }
+      if(urlParams.drop){ els.dropD.value=urlParams.drop; els.dropDVal.textContent=els.dropD.value }
+
+      reset();
+    }
+
+    function reset(){
+      playing=false; els.playBtn.textContent='Play'; cancelAnimationFrame(rafId);
+      state.round=1; state.maxRounds=parseInt(els.rounds.value,10); state.tension=parseInt(els.tension0.value,10);
+      state.history=[]; state.scores={A:0,B:0}; state.forceD=false; els.ending.textContent='Outcome: —';
+      clearLog(); log('Simulation reset.');
+      draw();
+    }
+
+    function togglePlay(){ playing=!playing; els.playBtn.textContent=playing?'Pause':'Play'; if(playing) loop() }
+    function loop(){ if(!playing) return; step(); draw(); if(playing) rafId=setTimeout(()=>requestAnimationFrame(loop), speedMs) }
+
+    function step(){
+      if(state.round>state.maxRounds) { playing=false; els.playBtn.textContent='Play'; return }
+      const ctxA = buildContext('A'), ctxB = buildContext('B');
+      let aAction = decide(els.policyA.value, ctxA);
+      let bAction = decide(els.policyB.value, ctxB);
+
+      let whyA = ctxA.why, whyB = ctxB.why;
+
+      if(state.forceD){ aAction='D'; bAction='D'; state.forceD=false; }
+
+      const result = resolve(aAction,bAction);
+      state.scores.A += result.payoff.A; state.scores.B += result.payoff.B;
+      state.tension = clamp(result.tension,0,100);
+      state.history.push({round:state.round,a:aAction,b:bAction,payoff:result.payoff,tension:state.tension});
+
+      log(`R${state.round}: A=${aAction} B=${bAction} | ΔA=${fmt(result.payoff.A)} ΔB=${fmt(result.payoff.B)} | tension→ ${fmt(state.tension)} ${result.end?'[END]':''}`);
+
+      // prepare perceived actions for next turn with noise/false alarm
+      const noise = parseInt(els.noise.value,10);
+      const falseRate = parseInt(els.falseAlarm.value,10)/100;
+      const percA = perceive(aAction, noise, falseRate); // what B thinks A did
+      const percB = perceive(bAction, noise, falseRate); // what A thinks B did
+
+      state.perceived = {A: percB, B: percA}; // perspective for next decision
+      state.why = {A: whyA, B: whyB};
+
+      if(result.end || state.round===state.maxRounds){
+        playing=false; els.playBtn.textContent='Play';
+        els.ending.textContent = 'Outcome: ' + classifyEnding();
+      }
+
+      state.round++;
+    }
+
+    function decide(name, ctx){ return policies[name](ctx) }
+
+    function buildContext(side){
+      const me = side; const op = side==='A'?'B':'A';
+      const last = state.history[state.history.length-1];
+      const lastMine = last? last[me.toLowerCase()] : null;
+      const lastOpp  = last? last[op.toLowerCase()] : null;
+      const oppAgg = aggressionRate(op);
+      const percOpp = (state.perceived? state.perceived[me] : null) || lastOpp || 'D';
+      const t = state.tension;
+      const whyRef = { text: '' };
+      return { me, op, t, lastMine, lastOpp, percOpp, oppAgg, whyRef };
+    }
+
+    // === Policies ===
+    function makePolicyTitForTat(){
+      return (ctx)=>{
+        const {t, percOpp, whyRef} = ctx;
+        let action = (state.history.length===0)? 'D' : (percOpp==='S'? 'P' : percOpp);
+        if(t>80 && percOpp!=='D') action = 'P';
+        whyRef.text = `Mirror opponent; at high tension avoid D if provoked.`;
+        els.aWhy.textContent = ctx.me==='A'? whyRef.text : els.aWhy.textContent;
+        els.bWhy.textContent = ctx.me==='B'? whyRef.text : els.bWhy.textContent;
+        return action;
+      }
+    }
+    function makePolicyGrim(){
+      let grim=false;
+      return (ctx)=>{
+        const {percOpp, t, whyRef} = ctx;
+        if(percOpp==='S' || (percOpp==='P' && t>65)) grim=true;
+        const action = grim? (t>85? 'S':'P') : 'D';
+        whyRef.text = grim? 'Triggered: maintain hard stance.' : 'Cooperate until serious provocation.';
+        if(ctx.me==='A') els.aWhy.textContent=whyRef.text; else els.bWhy.textContent=whyRef.text;
+        return action;
+      }
+    }
+    function makePolicyWSLS(){
+      let lastPay=0, lastAct='D';
+      return (ctx)=>{
+        const {t, whyRef} = ctx;
+        const improved = (state.history.length? (deltaScore(ctx.me) > lastPay): true);
+        if(improved){ /* stay */ } else { lastAct = (lastAct==='D'?'P':'D') }
+        if(t>90 && Math.random()<0.3) lastAct='S';
+        whyRef.text = improved? 'Win‑stay' : 'Lose‑shift';
+        if(ctx.me==='A') els.aWhy.textContent=whyRef.text; else els.bWhy.textContent=whyRef.text;
+        lastPay = deltaScore(ctx.me);
+        return lastAct;
+      }
+    }
+    function makePolicyRisky(){
+      return (ctx)=>{
+        const {t, oppAgg, whyRef} = ctx;
+        let pStrike = (t-40)/100 + oppAgg*0.2; pStrike = clamp(pStrike,0,0.7);
+        const r = state.rng();
+        const action = (t>70 && r<pStrike)? 'S' : (r<0.75? 'P':'D');
+        whyRef.text = `Probabilistic hawk: p(S)≈${(pStrike*100|0)}%`;
+        if(ctx.me==='A') els.aWhy.textContent=whyRef.text; else els.bWhy.textContent=whyRef.text;
+        return action;
+      }
+    }
+    function makePolicyDove(){
+      return (ctx)=>{
+        const {t, percOpp, whyRef} = ctx;
+        let action='D'; if(percOpp==='P' && t>50) action='P'; if(t>95 && percOpp!=='D') action='S';
+        whyRef.text = 'Prefer peace; posture only under sustained pressure; strike near max tension.';
+        if(ctx.me==='A') els.aWhy.textContent=whyRef.text; else els.bWhy.textContent=whyRef.text;
+        return action;
+      }
+    }
+
+    function deltaScore(side){
+      const idx=state.history.length-1; if(idx<0) return 0;
+      const h=state.history[idx]; return side==='A'? h.payoff.A : h.payoff.B;
+    }
+
+    function aggressionRate(side){
+      let c=0,p=0; for(const h of state.history){ if((side==='A'?h.a:h.b)!=='D'){c++} p++ }
+      return p? c/p:0;
+    }
+
+    // === Perception model ===
+    function perceive(action, noise, falseRate){
+      let a = action;
+      // false alarm: posture perceived as strike
+      if(a==='P' && Math.random()<falseRate) a='S';
+      // jitter: with noise, sometimes misread D as P or P as D
+      const r=Math.random()*100; if(noise>0){
+        if(a==='D' && r<noise*0.3) a='P';
+        else if(a==='P' && r<noise*0.2) a='D';
+      }
+      return a;
+    }
+
+    // === Resolution ===
+    function resolve(a,b){
+      const t=state.tension; let end=false;
+      function mult(x){ if(x>=0 && t<=20) return x*1.2; if(x<0 && t>=60) return x*1.5; return x }
+      let dA=0,dB=0, tNext=t;
+      if(a==='D' && b==='D'){ dA=2; dB=2; tNext-= parseInt(els.dropD.value,10) }
+      else if(a==='P' && b==='D'){ dA=3; dB=0; tNext+=10 }
+      else if(a==='D' && b==='P'){ dA=0; dB=3; tNext+=10 }
+      else if(a==='P' && b==='P'){ dA=1; dB=1; tNext+=15 }
+      else if(a==='S' && b==='D'){ dA=6; dB=-6; tNext+=40; end=true }
+      else if(a==='D' && b==='S'){ dA=-6; dB=6; tNext+=40; end=true }
+      else if(a==='S' && b==='P'){ dA=4; dB=-4; tNext+=35; end=true }
+      else if(a==='P' && b==='S'){ dA=-4; dB=4; tNext+=35; end=true }
+      else if(a==='S' && b==='S'){ dA=-50; dB=-50; tNext+=60; end=true }
+      dA=mult(dA); dB=mult(dB);
+      return { payoff:{A:Math.round(dA), B:Math.round(dB)}, tension:tNext, end };
+    }
+
+    // === Ending classification ===
+    function classifyEnding(){
+      const h=state.history; if(!h.length) return '—';
+      const last=h[h.length-1];
+      if(last.a==='S' && last.b==='S') return 'Mutually Assured Destruction';
+      if(last.a==='S' && last.b!=='S') return 'First Strike Victory (A)';
+      if(last.b==='S' && last.a!=='S') return 'First Strike Victory (B)';
+      const avgT = h.reduce((s,x)=>s+x.tension,0)/h.length;
+      if(avgT<30) return 'Stable Peace'; if(avgT<60) return 'Uneasy Truce'; return 'Crisis Spiral';
+    }
+
+    // === Drawing ===
+    function draw(){
+      els.round.textContent=state.round; els.scoreA.textContent=state.scores.A; els.scoreB.textContent=state.scores.B;
+      const last=state.history[state.history.length-1];
+      els.aAction.textContent = last? last.a : '—'; els.bAction.textContent = last? last.b : '—';
+
+      // DEFCON lights
+      const t = state.tension; els.dGreen.className='dot'+(t<40?' on green':''); els.dAmber.className='dot'+(t>=40&&t<75?' on amber':''); els.dRed.className='dot'+(t>=75?' on red':'');
+
+      // Gauge needle (0..100 maps to -90..+90)
+      const ang = -90 + (t/100)*180; els.needle.style.transform = `rotate(${ang}deg)`;
+
+      drawChart();
+    }
+
+    function drawChart(){
+      const c=els.chart, x=c.getContext('2d'); const W=c.width,H=c.height; x.clearRect(0,0,W,H);
+      x.fillStyle='#0c1420'; x.fillRect(0,0,W,H);
+      x.strokeStyle='#203044'; x.lineWidth=1; // grid
+      for(let i=0;i<=10;i++){ const y=i*(H/10); x.beginPath(); x.moveTo(0,y); x.lineTo(W,y); x.stroke() }
+
+      // Tension line
+      x.lineWidth=2; x.strokeStyle='#ff5f6d'; x.beginPath();
+      state.history.forEach((h,i)=>{ const px = (i/(Math.max(1,state.maxRounds-1)))* (W-20) + 10; const py = H - (h.tension/100)*(H-20) - 10; if(i===0) x.moveTo(px,py); else x.lineTo(px,py) });
+      x.stroke();
+
+      // Score lines
+      x.strokeStyle='#2bd17e'; x.beginPath();
+      let maxScore=Math.max(1, ...state.history.map(h=>Math.max(h.payoff.A, h.payoff.B)).map(Math.abs));
+      // cumulative
+      let cumA=0,cumB=0; const maxCum = Math.max(1, ...state.history.map(h=>{ cumA+=h.payoff.A; return Math.abs(cumA)}));
+      cumA=0; maxScore=Math.max(maxScore,maxCum);
+      x.beginPath(); cumA=0; state.history.forEach((h,i)=>{ cumA+=h.payoff.A; const px=(i/(Math.max(1,state.maxRounds-1)))*(W-20)+10; const py=H - (normalize(cumA, -maxScore*state.maxRounds, maxScore*state.maxRounds))*(H-20) - 10; if(i===0) x.moveTo(px,py); else x.lineTo(px,py)}); x.stroke();
+      x.strokeStyle='#5fb3ff'; x.beginPath(); cumB=0; state.history.forEach((h,i)=>{ cumB+=h.payoff.B; const px=(i/(Math.max(1,state.maxRounds-1)))*(W-20)+10; const py=H - (normalize(cumB, -maxScore*state.maxRounds, maxScore*state.maxRounds))*(H-20) - 10; if(i===0) x.moveTo(px,py); else x.lineTo(px,py)}); x.stroke();
+    }
+
+    function normalize(v,min,max){ return (v-min)/(max-min) }
+
+    // === Log ===
+    function log(msg){ const time = new Date().toLocaleTimeString(); els.log.innerText += `[${time}] ${msg}\n`; els.log.scrollTop=els.log.scrollHeight }
+    function clearLog(){ els.log.innerText='' }
+
+    // === Helpers ===
+    function clamp(n,min,max){ return Math.max(min,Math.min(max,n)) }
+    function fmt(n){ return (Math.round(n*10)/10).toFixed(1) }
+
+    function applySeed(s){ state.seedStr=s; state.rng = mulberry32(hashSeed(String(s))); Math.random = state.rng; log(`Seed set to: ${s}`) }
+
+    function copyShareLink(){
+      const url = new URL(location.href);
+      url.searchParams.set('seed', state.seedStr);
+      url.searchParams.set('N', els.rounds.value);
+      url.searchParams.set('tension', els.tension0.value);
+      url.searchParams.set('false', els.falseAlarm.value);
+      url.searchParams.set('drop', els.dropD.value);
+      url.searchParams.set('policyA', els.policyA.value);
+      url.searchParams.set('policyB', els.policyB.value);
+      navigator.clipboard.writeText(url.toString()).then(()=>{
+        log('Share link copied to clipboard.');
+      })
+    }
+
+    // === URL params ===
+    const urlParams = (()=>{ const p=new URLSearchParams(location.search); return Object.fromEntries(p.entries()) })();
+
+    // === Boot ===
+    init();
+  </script>
+</body>
+</html>
